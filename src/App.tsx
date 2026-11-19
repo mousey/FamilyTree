@@ -4,8 +4,6 @@ import {
   createMockFamilyTree,
   describeRelationship,
   getTreeStats,
-  parseFamilyTreeJson,
-  parseGedcom,
   serializeFamilyTreeJson,
   serializeGedcom,
   type FamilyTree,
@@ -16,14 +14,32 @@ import {
 } from './core/index.js';
 import { computeTreeLayout } from './layout/treeLayout.js';
 import type { LayoutMode } from './layout/types.js';
+import {
+  buildBookletPages,
+  detectAndLoadFile,
+  groupIntoSpreads,
+  isSupportedImportFilename,
+  useScrapbookStore,
+  type HydratedDraftPayload,
+  type LoadedBundleResult,
+} from './scrapbook/index.js';
 import { DetailDrawer } from './components/DetailDrawer.js';
 import { PrintModal } from './components/PrintModal.js';
 import { RelationshipModal } from './components/RelationshipModal.js';
 import { Toolbar } from './components/Toolbar.js';
 import { TreeCanvas, type TreeCanvasHandle } from './components/TreeCanvas.js';
+import { ScrapbookPrintModal } from './components/scrapbook/ScrapbookPrintModal.js';
+import { ScrapbookPrintSheet } from './components/scrapbook/ScrapbookPrintSheet.js';
+import { ScrapbookWorkspace } from './components/scrapbook/ScrapbookWorkspace.js';
 
 export function App() {
   const [tree, setTree] = useState<FamilyTree>(() => createMockFamilyTree());
+  const [rawGedcom, setRawGedcom] = useState<string | null>(null);
+  const [activeWorkspace, setActiveWorkspace] = useState<'tree' | 'scrapbook'>('tree');
+  const [scrapbookViewMode, setScrapbookViewMode] = useState<'edit' | 'preview'>('edit');
+  const [scrapbookSpreadIndex, setScrapbookSpreadIndex] = useState<number>(0);
+  const [scrapbookPrintModalOpen, setScrapbookPrintModalOpen] = useState(false);
+  const [scrapbookPrintActive, setScrapbookPrintActive] = useState(false);
   const [focusPersonId, setFocusPersonId] = useState<PersonId>(
     () => tree.metadata.defaultRootPersonId ?? Object.keys(tree.persons)[0] ?? '',
   );
@@ -139,10 +155,55 @@ export function App() {
     return map;
   }, [effectiveFocusId, graph, lineageMode]);
 
-  // Resolve primary portrait photo URLs (user-attached overrides OR valid image URLs)
+  const handleHydratedSession = useCallback(
+    (payload: HydratedDraftPayload) => {
+      setTree(payload.tree);
+      setRawGedcom(payload.rawGedcom ?? null);
+      setFocusPersonId(payload.focusPersonId);
+      setSelectedPersonId(null);
+      setCollapsedUnionIds(new Set());
+      setCollapsedAncestorIds(new Set());
+      setHighlightedPersonIds(new Set());
+      setHighlightBannerText(undefined);
+      setPersonPhotoOverrides(new Map());
+      setMediaFileOverrides(new Map());
+      showToast('Restored local draft from this browser');
+      window.setTimeout(() => {
+        canvasRef.current?.fitToScreen(true);
+      }, 60);
+    },
+    [showToast],
+  );
+
+  const applyLoadedBundleRef = useRef<
+    (loaded: LoadedBundleResult, sourceFilename: string) => void
+  >(() => {});
+
+  const scrapbookStore = useScrapbookStore({
+    tree,
+    graph,
+    rawGedcom,
+    focusPersonId: effectiveFocusId,
+    lineageMode,
+    onHydratedSession: handleHydratedSession,
+    onImportedBundle: (loaded, filename) =>
+      applyLoadedBundleRef.current(loaded, filename),
+    onNotify: showToast,
+  });
+
+  // Resolve primary portrait photo URLs (shared Scrapbook asset, user override, or GEDCOM URL)
   const photoUrlsByPersonId = useMemo(() => {
     const map = new Map<PersonId, string>();
+    const portraitAssets = scrapbookStore.doc.personPortraitAssetIds;
     for (const person of graph.getAllPersons()) {
+      const portraitAssetId = portraitAssets?.[person.id];
+      const portraitUrl = portraitAssetId
+        ? scrapbookStore.assetUrls.get(portraitAssetId)
+        : undefined;
+      if (portraitUrl) {
+        map.set(person.id, portraitUrl);
+        continue;
+      }
       const override = personPhotoOverrides.get(person.id);
       if (override) {
         map.set(person.id, override);
@@ -161,23 +222,36 @@ export function App() {
       }
     }
     return map;
-  }, [graph, mediaFileOverrides, personPhotoOverrides, tree.media]);
+  }, [
+    graph,
+    mediaFileOverrides,
+    personPhotoOverrides,
+    scrapbookStore.assetUrls,
+    scrapbookStore.doc.personPortraitAssetIds,
+    tree.media,
+  ]);
 
   // Global keyboard shortcuts for canvas navigation
   useEffect(() => {
     const onKeyDown = (e: KeyboardEvent) => {
       const tag = document.activeElement?.tagName;
       if (tag === 'INPUT' || tag === 'SELECT' || tag === 'TEXTAREA') return;
-      if (e.key === '+' || e.key === '=') {
-        e.preventDefault();
-        canvasRef.current?.zoomBy(1.18);
-      } else if (e.key === '-') {
-        e.preventDefault();
-        canvasRef.current?.zoomBy(0.84);
-      } else if (e.key === '0') {
-        e.preventDefault();
-        canvasRef.current?.fitToScreen(true);
-      } else if (e.key === 'Escape') {
+      if (activeWorkspace === 'tree') {
+        if (e.key === '+' || e.key === '=') {
+          e.preventDefault();
+          canvasRef.current?.zoomBy(1.18);
+          return;
+        } else if (e.key === '-') {
+          e.preventDefault();
+          canvasRef.current?.zoomBy(0.84);
+          return;
+        } else if (e.key === '0') {
+          e.preventDefault();
+          canvasRef.current?.fitToScreen(true);
+          return;
+        }
+      }
+      if (e.key === 'Escape') {
         setPrintModalOpen(false);
         setRelationshipModalTarget(null);
         setSelectedPersonId(null);
@@ -187,7 +261,7 @@ export function App() {
     };
     window.addEventListener('keydown', onKeyDown);
     return () => window.removeEventListener('keydown', onKeyDown);
-  }, []);
+  }, [activeWorkspace]);
 
   const handleFocusPerson = useCallback(
     (personId: PersonId) => {
@@ -195,11 +269,12 @@ export function App() {
       setFocusPersonId(personId);
       setCollapsedUnionIds(new Set());
       setCollapsedAncestorIds(new Set());
+      scrapbookStore.notifyTreeChanged();
       window.setTimeout(() => {
         canvasRef.current?.fitToScreen(true);
       }, 40);
     },
-    [graph],
+    [graph, scrapbookStore],
   );
 
   const handleSelectAndPan = useCallback(
@@ -256,71 +331,89 @@ export function App() {
     [layout.nodesByInstanceId],
   );
 
+  const applyLoadedBundle = useCallback(
+    (loaded: LoadedBundleResult, sourceFilename: string) => {
+      const importedTree = loaded.tree;
+      const personIds = Object.keys(importedTree.persons);
+      if (personIds.length === 0) {
+        showToast('No individuals found in imported file.');
+        return;
+      }
+
+      const nextFocus =
+        loaded.scrapbookDoc?.focusPersonId ??
+        importedTree.metadata.defaultRootPersonId ??
+        personIds[0]!;
+      const nextGraph = createFamilyGraph(importedTree);
+
+      // Revoke previous object URLs for standalone media overrides before replacing
+      for (const oldUrl of mediaFileOverrides.values()) {
+        if (oldUrl.startsWith('blob:')) URL.revokeObjectURL(oldUrl);
+      }
+      const nextMediaOverrides = new Map<MediaId, string>();
+      for (const [mediaId, item] of loaded.gedcomMediaBlobs.entries()) {
+        nextMediaOverrides.set(mediaId, URL.createObjectURL(item.blob));
+      }
+
+      setTree(importedTree);
+      setRawGedcom(loaded.rawGedcom ?? null);
+      setFocusPersonId(nextFocus);
+      setSelectedPersonId(null);
+      setCollapsedUnionIds(new Set());
+      setCollapsedAncestorIds(new Set());
+      setHighlightedPersonIds(new Set());
+      setHighlightBannerText(undefined);
+      setPersonPhotoOverrides(new Map());
+      setMediaFileOverrides(nextMediaOverrides);
+
+      scrapbookStore.hydrateFromBundle(loaded, nextGraph, nextFocus);
+
+      const warningCount = loaded.warnings.length;
+      const kindLabel =
+        loaded.kind === 'heirloom_zip'
+          ? 'Heirloom Scrapbook'
+          : loaded.kind === 'gdz'
+            ? `GEDZIP (${loaded.gedcomMediaBlobs.size} media)`
+            : importedTree.metadata.title ?? sourceFilename;
+
+      showToast(
+        `Loaded "${kindLabel}" (${personIds.length} people${
+          warningCount > 0 ? `, ${warningCount} notes` : ''
+        })`,
+      );
+
+      window.setTimeout(() => {
+        canvasRef.current?.fitToScreen(true);
+      }, 60);
+    },
+    [mediaFileOverrides, scrapbookStore, showToast],
+  );
+  applyLoadedBundleRef.current = applyLoadedBundle;
+
   const handleImportFile = useCallback(
     async (file: File) => {
       try {
-        const text = await file.text();
-        let importedTree: FamilyTree;
-        let warningCount = 0;
-
-        if (file.name.toLowerCase().endsWith('.json')) {
-          const parsed = parseFamilyTreeJson(text, { strict: false });
-          importedTree = parsed.tree;
-          warningCount = parsed.validation.warnings.length;
-          if (!parsed.validation.valid) {
-            showToast(
-              `Import failed: ${parsed.validation.errors[0]?.message ?? 'Invalid JSON tree'}`,
-            );
-            return;
-          }
-        } else {
-          const parsed = parseGedcom(text);
-          importedTree = parsed.tree;
-          warningCount = parsed.warnings.length;
-        }
-
-        const personIds = Object.keys(importedTree.persons);
-        if (personIds.length === 0) {
-          showToast('No individuals found in imported file.');
-          return;
-        }
-
-        const nextFocus = importedTree.metadata.defaultRootPersonId ?? personIds[0]!;
-        setTree(importedTree);
-        setFocusPersonId(nextFocus);
-        setSelectedPersonId(null);
-        setCollapsedUnionIds(new Set());
-        setCollapsedAncestorIds(new Set());
-        setHighlightedPersonIds(new Set());
-        setHighlightBannerText(undefined);
-        setPersonPhotoOverrides(new Map());
-        setMediaFileOverrides(new Map());
-
-        showToast(
-          `Loaded "${importedTree.metadata.title ?? file.name}" (${personIds.length} people${
-            warningCount > 0 ? `, ${warningCount} notes` : ''
-          })`,
-        );
-
-        window.setTimeout(() => {
-          canvasRef.current?.fitToScreen(true);
-        }, 60);
+        const loaded = await detectAndLoadFile(file);
+        applyLoadedBundle(loaded, file.name);
       } catch (err) {
         const msg = err instanceof Error ? err.message : String(err);
         showToast(`Could not import file: ${msg}`);
       }
     },
-    [showToast],
+    [applyLoadedBundle, showToast],
   );
 
-  const triggerDownload = (content: string, filename: string, mime: string) => {
-    const blob = new Blob([content], { type: mime });
+  const triggerBlobDownload = (blob: Blob, filename: string) => {
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
     a.download = filename;
     a.click();
-    URL.revokeObjectURL(url);
+    window.setTimeout(() => URL.revokeObjectURL(url), 1000);
+  };
+
+  const triggerDownload = (content: string, filename: string, mime: string) => {
+    triggerBlobDownload(new Blob([content], { type: mime }), filename);
   };
 
   const handleExportGedcom = useCallback(() => {
@@ -341,10 +434,27 @@ export function App() {
     showToast('Exported FamilyTree JSON (.json)');
   }, [showToast, tree]);
 
+  const handleExportHeirloomZip = useCallback(async () => {
+    try {
+      const zipBlob = await scrapbookStore.exportHeirloomZip();
+      const slug = (scrapbookStore.doc.title || tree.metadata.title || 'heirloom-scrapbook')
+        .toLowerCase()
+        .replace(/[^a-z0-9]+/g, '-');
+      triggerBlobDownload(zipBlob, `${slug}.heirloom.zip`);
+      showToast('Saved Heirloom Scrapbook (.heirloom.zip)');
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      showToast(`Export failed: ${msg}`);
+    }
+  }, [scrapbookStore, showToast, tree.metadata.title]);
+
   const handleResetDemo = useCallback(() => {
     const demo = createMockFamilyTree();
+    const demoFocus = demo.metadata.defaultRootPersonId ?? 'P1';
+    const demoGraph = createFamilyGraph(demo);
     setTree(demo);
-    setFocusPersonId(demo.metadata.defaultRootPersonId ?? 'P1');
+    setRawGedcom(null);
+    setFocusPersonId(demoFocus);
     setSelectedPersonId(null);
     setMode('hourglass');
     setAncestorLevels(3);
@@ -353,21 +463,56 @@ export function App() {
     setCollapsedAncestorIds(new Set());
     setHighlightedPersonIds(new Set());
     setHighlightBannerText(undefined);
+    setPersonPhotoOverrides(new Map());
+    setMediaFileOverrides(new Map());
+    scrapbookStore.resetForNewTree(demoGraph, demoFocus);
     showToast('Loaded Hawthorne–Vance showcase tree');
     window.setTimeout(() => canvasRef.current?.fitToScreen(true), 60);
-  }, [showToast]);
+  }, [scrapbookStore, showToast]);
 
   const handleAttachPersonPhoto = useCallback(
     (personId: PersonId, file: File) => {
-      const url = URL.createObjectURL(file);
-      setPersonPhotoOverrides((prev) => {
-        const next = new Map(prev);
-        next.set(personId, url);
-        return next;
-      });
-      showToast(`Attached portrait photo for ${graph.getPerson(personId)?.name.display ?? personId}`);
+      void scrapbookStore
+        .attachPortrait(personId, file)
+        .then(() => {
+          showToast(
+            `Attached portrait photo for ${graph.getPerson(personId)?.name.display ?? personId}`,
+          );
+        })
+        .catch((err) => {
+          const msg = err instanceof Error ? err.message : String(err);
+          showToast(`Could not attach portrait: ${msg}`);
+        });
     },
-    [graph, showToast],
+    [graph, scrapbookStore, showToast],
+  );
+
+  const handleOpenInScrapbook = useCallback(
+    (personId: PersonId) => {
+      if (!graph.getPerson(personId)) return;
+      setFocusPersonId(personId);
+      setSelectedPersonId(null);
+      scrapbookStore.rebuildForFocusPerson(personId);
+      setActiveWorkspace('scrapbook');
+    },
+    [graph, scrapbookStore],
+  );
+
+  const handleChangeWorkspace = useCallback(
+    (next: 'tree' | 'scrapbook') => {
+      if (
+        next === 'scrapbook' &&
+        !scrapbookStore.isDirty &&
+        scrapbookStore.doc.focusPersonId !== effectiveFocusId
+      ) {
+        scrapbookStore.rebuildForFocusPerson(effectiveFocusId);
+      }
+      setActiveWorkspace(next);
+      if (next === 'tree') {
+        window.setTimeout(() => canvasRef.current?.fitToScreen(true), 40);
+      }
+    },
+    [effectiveFocusId, scrapbookStore],
   );
 
   const handleAttachMediaFile = useCallback(
@@ -385,6 +530,7 @@ export function App() {
 
   const handlePrintSvg = useCallback(
     (svgMarkup: string, orientation: 'landscape' | 'portrait') => {
+      setScrapbookPrintActive(false);
       setPrintPayload({ svg: svgMarkup, orientation });
       setPrintModalOpen(false);
 
@@ -404,6 +550,103 @@ export function App() {
     [],
   );
 
+  const handlePrintScrapbookBooklet = useCallback(() => {
+    setPrintPayload(null);
+    setScrapbookPrintActive(true);
+    setScrapbookPrintModalOpen(false);
+
+    const paperCss = scrapbookStore.doc.paperSize === 'letter' ? 'letter portrait' : 'A4 portrait';
+    let styleEl = document.getElementById('a3-page-orientation-style') as HTMLStyleElement | null;
+    if (!styleEl) {
+      styleEl = document.createElement('style');
+      styleEl.id = 'a3-page-orientation-style';
+      document.head.appendChild(styleEl);
+    }
+    styleEl.textContent = `@media print { @page { size: ${paperCss}; margin: 0; } }`;
+
+    window.setTimeout(() => {
+      window.print();
+    }, 150);
+  }, [scrapbookStore.doc.paperSize]);
+
+  const scrapbookActivePages = useMemo(
+    () => buildBookletPages(scrapbookStore.doc, { mode: scrapbookViewMode }),
+    [scrapbookStore.doc, scrapbookViewMode],
+  );
+  const scrapbookSpreads = useMemo(
+    () => groupIntoSpreads(scrapbookActivePages),
+    [scrapbookActivePages],
+  );
+  const clampedSpreadIdx = Math.min(
+    Math.max(0, scrapbookSpreadIndex),
+    Math.max(0, scrapbookSpreads.length - 1),
+  );
+  const activeSpread = scrapbookSpreads[clampedSpreadIdx];
+  const spreadNavLabel = !activeSpread
+    ? 'Empty'
+    : activeSpread.spreadIndex === 0
+      ? `Cover · 1 / ${scrapbookActivePages.length}`
+      : activeSpread.left && activeSpread.right
+        ? `Pages ${activeSpread.left.pageNumber}–${activeSpread.right.pageNumber} of ${scrapbookActivePages.length}`
+        : `Page ${activeSpread.left?.pageNumber ?? activeSpread.right?.pageNumber ?? 1} of ${scrapbookActivePages.length}`;
+
+  const scrapbookFocusName =
+    graph.getPerson(scrapbookStore.doc.focusPersonId)?.name.display ??
+    scrapbookStore.doc.focusPersonId;
+
+  const scrapbookControlsSlot = (
+    <div className="sb-toolbar-controls">
+      <div className="toolbar-divider" />
+      <div className="sb-focus-badge" title={`Focused family album around ${scrapbookFocusName}`}>
+        <span>Album:</span>
+        <strong>{scrapbookFocusName}</strong>
+      </div>
+
+      <div className="sb-nav-pill" aria-label="Spread pagination">
+        <button
+          type="button"
+          className="sb-nav-btn"
+          disabled={clampedSpreadIdx <= 0}
+          onClick={() => setScrapbookSpreadIndex(Math.max(0, clampedSpreadIdx - 1))}
+          title="Previous spread"
+        >
+          ‹
+        </button>
+        <span className="sb-nav-label">{spreadNavLabel}</span>
+        <button
+          type="button"
+          className="sb-nav-btn"
+          disabled={clampedSpreadIdx >= scrapbookSpreads.length - 1}
+          onClick={() =>
+            setScrapbookSpreadIndex(
+              Math.min(scrapbookSpreads.length - 1, clampedSpreadIdx + 1),
+            )
+          }
+          title="Next spread"
+        >
+          ›
+        </button>
+      </div>
+
+      <div className="segmented" role="group" aria-label="Scrapbook editing mode">
+        <button
+          type="button"
+          className={`segmented-btn ${scrapbookViewMode === 'edit' ? 'is-active' : ''}`}
+          onClick={() => setScrapbookViewMode('edit')}
+        >
+          Edit
+        </button>
+        <button
+          type="button"
+          className={`segmented-btn ${scrapbookViewMode === 'preview' ? 'is-active' : ''}`}
+          onClick={() => setScrapbookViewMode('preview')}
+        >
+          Preview
+        </button>
+      </div>
+    </div>
+  );
+
   return (
     <>
       <div
@@ -414,7 +657,7 @@ export function App() {
         onDrop={(e) => {
           e.preventDefault();
           const dropped = e.dataTransfer.files[0];
-          if (dropped) {
+          if (dropped && isSupportedImportFilename(dropped.name)) {
             void handleImportFile(dropped);
           }
         }}
@@ -422,6 +665,9 @@ export function App() {
         <Toolbar
           graph={graph}
           stats={stats}
+          activeWorkspace={activeWorkspace}
+          onChangeWorkspace={handleChangeWorkspace}
+          scrapbookControlsSlot={scrapbookControlsSlot}
           mode={mode}
           ancestorLevels={ancestorLevels}
           descendantLevels={descendantLevels}
@@ -446,48 +692,68 @@ export function App() {
             setRelationshipModalTarget(selectedPersonId ?? effectiveFocusId)
           }
           onOpenPrintStudio={() => setPrintModalOpen(true)}
+          onOpenScrapbookPrint={() => setScrapbookPrintModalOpen(true)}
           onImportFile={(f) => void handleImportFile(f)}
           onExportGedcom={handleExportGedcom}
           onExportJson={handleExportJson}
+          onExportHeirloomZip={() => void handleExportHeirloomZip()}
+          onClearLocalDraft={() => void scrapbookStore.clearLocalDraft()}
           onResetDemo={handleResetDemo}
           onToggleTheme={() => setTheme((t) => (t === 'light' ? 'dark' : 'light'))}
         />
 
         <main className="workspace">
-          <TreeCanvas
-            ref={canvasRef}
-            layout={layout}
-            selectedPersonId={selectedPersonId}
-            highlightedPersonIds={highlightedPersonIds}
-            highlightBannerText={highlightBannerText}
-            relationshipLabels={relationshipLabels}
-            photoUrlsByPersonId={photoUrlsByPersonId}
-            drawerOpen={selectedPersonId !== null}
-            onSelectPerson={(pid) => setSelectedPersonId(pid)}
-            onFocusPerson={handleFocusPerson}
-            onToggleUnionBranch={handleToggleUnionBranch}
-            onToggleAncestors={handleToggleAncestors}
-            onClearBackground={() => setSelectedPersonId(null)}
-            onClearHighlight={() => {
-              setHighlightedPersonIds(new Set());
-              setHighlightBannerText(undefined);
-            }}
-          />
+          {activeWorkspace === 'tree' ? (
+            <>
+              <TreeCanvas
+                ref={canvasRef}
+                layout={layout}
+                selectedPersonId={selectedPersonId}
+                highlightedPersonIds={highlightedPersonIds}
+                highlightBannerText={highlightBannerText}
+                relationshipLabels={relationshipLabels}
+                photoUrlsByPersonId={photoUrlsByPersonId}
+                drawerOpen={selectedPersonId !== null}
+                onSelectPerson={(pid) => setSelectedPersonId(pid)}
+                onFocusPerson={handleFocusPerson}
+                onToggleUnionBranch={handleToggleUnionBranch}
+                onToggleAncestors={handleToggleAncestors}
+                onClearBackground={() => setSelectedPersonId(null)}
+                onClearHighlight={() => {
+                  setHighlightedPersonIds(new Set());
+                  setHighlightBannerText(undefined);
+                }}
+              />
 
-          {selectedPersonId && graph.getPerson(selectedPersonId) && (
-            <DetailDrawer
+              {selectedPersonId && graph.getPerson(selectedPersonId) && (
+                <DetailDrawer
+                  graph={graph}
+                  personId={selectedPersonId}
+                  focusPersonId={effectiveFocusId}
+                  relationshipLabel={relationshipLabels.get(selectedPersonId)}
+                  photoUrlsByPersonId={photoUrlsByPersonId}
+                  mediaUrlsByMediaId={mediaFileOverrides}
+                  onClose={() => setSelectedPersonId(null)}
+                  onSelectPerson={handleSelectAndPan}
+                  onSetFocus={handleFocusPerson}
+                  onOpenInScrapbook={(pid) => {
+                    setScrapbookSpreadIndex(0);
+                    handleOpenInScrapbook(pid);
+                  }}
+                  onCompareRelationship={(pid) => setRelationshipModalTarget(pid)}
+                  onAttachPersonPhoto={handleAttachPersonPhoto}
+                  onAttachMediaFile={handleAttachMediaFile}
+                />
+              )}
+            </>
+          ) : (
+            <ScrapbookWorkspace
               graph={graph}
-              personId={selectedPersonId}
-              focusPersonId={effectiveFocusId}
-              relationshipLabel={relationshipLabels.get(selectedPersonId)}
-              photoUrlsByPersonId={photoUrlsByPersonId}
-              mediaUrlsByMediaId={mediaFileOverrides}
-              onClose={() => setSelectedPersonId(null)}
-              onSelectPerson={handleSelectAndPan}
-              onSetFocus={handleFocusPerson}
-              onCompareRelationship={(pid) => setRelationshipModalTarget(pid)}
-              onAttachPersonPhoto={handleAttachPersonPhoto}
-              onAttachMediaFile={handleAttachMediaFile}
+              store={scrapbookStore}
+              viewMode={scrapbookViewMode}
+              spreadIndex={clampedSpreadIdx}
+              onChangeSpreadIndex={setScrapbookSpreadIndex}
+              onExportHeirloomZip={() => void handleExportHeirloomZip()}
             />
           )}
         </main>
@@ -549,14 +815,29 @@ export function App() {
         />
       )}
 
+      {scrapbookPrintModalOpen && (
+        <ScrapbookPrintModal
+          graph={graph}
+          store={scrapbookStore}
+          onClose={() => setScrapbookPrintModalOpen(false)}
+          onPrintBooklet={handlePrintScrapbookBooklet}
+          onExportHeirloomZip={() => void handleExportHeirloomZip()}
+        />
+      )}
+
       {toastMessage && <div className="toast-banner">{toastMessage}</div>}
 
-      {/* Hidden on screen; renders full-bleed vector A3 sheet during window.print() */}
-      {printPayload && (
+      {/* Hidden on screen; renders full-bleed vector chart sheet during window.print() */}
+      {printPayload && !scrapbookPrintActive && (
         <div
           className="a3-print-only"
           dangerouslySetInnerHTML={{ __html: printPayload.svg }}
         />
+      )}
+
+      {/* Hidden on screen; renders multi-page portrait scrapbook booklet during window.print() */}
+      {scrapbookPrintActive && (
+        <ScrapbookPrintSheet graph={graph} store={scrapbookStore} />
       )}
     </>
   );

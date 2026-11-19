@@ -1,15 +1,20 @@
 import { useMemo, useRef, useState } from 'react';
 import {
-  compareGenealogicalDates,
   formatGenealogicalDate,
   formatLifespan,
   getEffectiveParentRelation,
   type FamilyGraph,
-  type GenealogicalDate,
   type MediaId,
   type PersonId,
 } from '../core/index.js';
-import { CameraIcon, CloseIcon, CrosshairIcon, LinkUsersIcon } from './Icons.js';
+import { buildPersonTimeline } from '../scrapbook/biography.js';
+import {
+  BookOpenIcon,
+  CameraIcon,
+  CloseIcon,
+  CrosshairIcon,
+  LinkUsersIcon,
+} from './Icons.js';
 import { getInitials } from './PersonCard.js';
 
 export interface DetailDrawerProps {
@@ -22,18 +27,10 @@ export interface DetailDrawerProps {
   onClose: () => void;
   onSelectPerson: (personId: PersonId) => void;
   onSetFocus: (personId: PersonId) => void;
+  onOpenInScrapbook: (personId: PersonId) => void;
   onCompareRelationship: (personId: PersonId) => void;
   onAttachPersonPhoto: (personId: PersonId, file: File) => void;
   onAttachMediaFile: (mediaId: MediaId, file: File) => void;
-}
-
-interface TimelineRow {
-  id: string;
-  label: string;
-  date?: GenealogicalDate;
-  place?: string;
-  description?: string;
-  notes?: string[];
 }
 
 export function DetailDrawer({
@@ -46,6 +43,7 @@ export function DetailDrawer({
   onClose,
   onSelectPerson,
   onSetFocus,
+  onOpenInScrapbook,
   onCompareRelationship,
   onAttachPersonPhoto,
   onAttachMediaFile,
@@ -62,62 +60,10 @@ export function DetailDrawer({
   const partnerUnions = graph.getUnionsAsPartner(personId);
   const siblings = graph.getSiblings(personId, { includeHalf: true, includeStep: true });
 
-  const timeline = useMemo<TimelineRow[]>(() => {
-    const items: TimelineRow[] = [];
-    if (person.birth) {
-      items.push({
-        id: 'birth',
-        label: 'Birth',
-        date: person.birth.date,
-        place: person.birth.place,
-        description: person.birth.description,
-        notes: person.birth.notes,
-      });
-    }
-    person.events.forEach((ev, idx) => {
-      items.push({
-        id: `ev_${idx}`,
-        label: ev.customType || ev.type.replace('_', ' '),
-        date: ev.date,
-        place: ev.place,
-        description: ev.description,
-        notes: ev.notes,
-      });
-    });
-    for (const union of partnerUnions) {
-      const coPartner = union.partners.find((p) => p.personId !== personId);
-      const coName = coPartner ? graph.getPerson(coPartner.personId)?.name.display : undefined;
-      if (union.marriage) {
-        items.push({
-          id: `marr_${union.id}`,
-          label: coName ? `Marriage to ${coName}` : 'Marriage',
-          date: union.marriage.date,
-          place: union.marriage.place,
-          notes: union.marriage.notes,
-        });
-      }
-      if (union.divorce) {
-        items.push({
-          id: `div_${union.id}`,
-          label: coName ? `Divorce from ${coName}` : 'Divorce',
-          date: union.divorce.date,
-          place: union.divorce.place,
-          notes: union.divorce.notes,
-        });
-      }
-    }
-    if (person.death) {
-      items.push({
-        id: 'death',
-        label: 'Death',
-        date: person.death.date,
-        place: person.death.place,
-        description: person.death.description,
-        notes: person.death.notes,
-      });
-    }
-    return items.sort((a, b) => compareGenealogicalDates(a.date, b.date));
-  }, [graph, partnerUnions, person, personId]);
+  const timeline = useMemo(
+    () => buildPersonTimeline(graph, personId),
+    [graph, personId],
+  );
 
   const linkedNotes = [
     ...person.notes,
@@ -222,6 +168,15 @@ export function DetailDrawer({
           >
             <CrosshairIcon size={14} />
             Set as Tree Focus
+          </button>
+          <button
+            type="button"
+            className="btn"
+            onClick={() => onOpenInScrapbook(personId)}
+            title="Curate immediate family Scrapbook booklet around this person"
+          >
+            <BookOpenIcon size={14} />
+            Scrapbook
           </button>
           <button
             type="button"

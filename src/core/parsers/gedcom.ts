@@ -330,6 +330,10 @@ function parseMediaDetailsFromNode(
   } else if (typeBase && formVal) {
     const ext = formVal.toLowerCase() === 'jpg' ? 'jpeg' : formVal.toLowerCase();
     mediaObj.mimeType = `${typeBase}/${ext}`;
+  } else if (formVal && formVal.includes('/')) {
+    mediaObj.mimeType = formVal.toLowerCase();
+  } else if (formVal && formVal.toLowerCase() === 'pdf') {
+    mediaObj.mimeType = 'application/pdf';
   }
 
   const width = parseNonNegativeInt(wdthFromForm ? getNodeText(wdthFromForm) : undefined);

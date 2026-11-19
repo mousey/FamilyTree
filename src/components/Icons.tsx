@@ -160,3 +160,20 @@ export function SparklesIcon({ size = 14, ...props }: IconProps) {
     </svg>
   );
 }
+
+export function BookOpenIcon({ size = 15, ...props }: IconProps) {
+  return (
+    <svg {...baseProps(size, props)}>
+      <path d="M2 4h6a4 4 0 0 1 4 4v12a3 3 0 0 0-3-3H2z" />
+      <path d="M22 4h-6a4 4 0 0 0-4 4v12a3 3 0 0 1 3-3h7z" />
+    </svg>
+  );
+}
+
+export function TrashIcon({ size = 14, ...props }: IconProps) {
+  return (
+    <svg {...baseProps(size, props)}>
+      <path d="M3 6h18M8 6V4h8v2M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6" />
+    </svg>
+  );
+}

@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import {
   formatLifespan,
   type FamilyGraph,
@@ -8,6 +8,7 @@ import {
 } from '../core/index.js';
 import type { LayoutMode } from '../layout/types.js';
 import {
+  BookOpenIcon,
   DownloadIcon,
   LinkUsersIcon,
   MoonIcon,
@@ -15,6 +16,7 @@ import {
   SearchIcon,
   SlidersIcon,
   SunIcon,
+  TrashIcon,
   TreeIcon,
   UploadIcon,
 } from './Icons.js';
@@ -22,6 +24,9 @@ import {
 export interface ToolbarProps {
   graph: FamilyGraph;
   stats: TreeStats;
+  activeWorkspace: 'tree' | 'scrapbook';
+  onChangeWorkspace: (ws: 'tree' | 'scrapbook') => void;
+  scrapbookControlsSlot?: ReactNode;
   mode: LayoutMode;
   ancestorLevels: number;
   descendantLevels: number;
@@ -41,9 +46,12 @@ export interface ToolbarProps {
   onSelectSearchResult: (personId: PersonId) => void;
   onOpenRelationshipFinder: () => void;
   onOpenPrintStudio: () => void;
+  onOpenScrapbookPrint?: () => void;
   onImportFile: (file: File) => void;
   onExportGedcom: () => void;
   onExportJson: () => void;
+  onExportHeirloomZip: () => void;
+  onClearLocalDraft: () => void;
   onResetDemo: () => void;
   onToggleTheme: () => void;
 }
@@ -51,6 +59,9 @@ export interface ToolbarProps {
 export function Toolbar({
   graph,
   stats,
+  activeWorkspace,
+  onChangeWorkspace,
+  scrapbookControlsSlot,
   mode,
   ancestorLevels,
   descendantLevels,
@@ -70,9 +81,12 @@ export function Toolbar({
   onSelectSearchResult,
   onOpenRelationshipFinder,
   onOpenPrintStudio,
+  onOpenScrapbookPrint,
   onImportFile,
   onExportGedcom,
   onExportJson,
+  onExportHeirloomZip,
+  onClearLocalDraft,
   onResetDemo,
   onToggleTheme,
 }: ToolbarProps) {
@@ -156,214 +170,248 @@ export function Toolbar({
 
       <div className="toolbar-divider" />
 
-      {/* Search */}
-      <div className="search-wrap">
-        <div className="search-input-box">
-          <SearchIcon size={14} style={{ color: 'var(--ink-muted)', flexShrink: 0 }} />
-          <input
-            ref={searchInputRef}
-            type="text"
-            placeholder="Search…"
-            value={query}
-            onFocus={() => setSearchOpen(true)}
-            onChange={(e) => {
-              setQuery(e.target.value);
-              setSearchOpen(true);
-              setActiveResultIdx(0);
-            }}
-            onKeyDown={(e) => {
-              if (e.key === 'ArrowDown') {
-                e.preventDefault();
-                setActiveResultIdx((i) => Math.min(searchResults.length - 1, i + 1));
-              } else if (e.key === 'ArrowUp') {
-                e.preventDefault();
-                setActiveResultIdx((i) => Math.max(0, i - 1));
-              } else if (e.key === 'Enter' && searchResults[activeResultIdx]) {
-                onSelectSearchResult(searchResults[activeResultIdx]!.id);
-                setSearchOpen(false);
-                setQuery('');
-              }
-            }}
-          />
-          <span className="search-kbd">/</span>
-        </div>
+      {/* Workspace Mode Toggle */}
+      <div className="segmented" role="group" aria-label="Workspace view">
+        <button
+          type="button"
+          className={`segmented-btn ${activeWorkspace === 'tree' ? 'is-active' : ''}`}
+          onClick={() => onChangeWorkspace('tree')}
+          style={{ display: 'inline-flex', alignItems: 'center', gap: 5 }}
+        >
+          <TreeIcon size={13} />
+          Tree
+        </button>
+        <button
+          type="button"
+          className={`segmented-btn ${activeWorkspace === 'scrapbook' ? 'is-active' : ''}`}
+          onClick={() => onChangeWorkspace('scrapbook')}
+          style={{ display: 'inline-flex', alignItems: 'center', gap: 5 }}
+        >
+          <BookOpenIcon size={13} />
+          Scrapbook
+        </button>
+      </div>
 
-        {searchOpen && (
-          <div className="search-dropdown">
-            {searchResults.length === 0 ? (
-              <div style={{ padding: '10px 12px', fontSize: 12, color: 'var(--ink-muted)' }}>
-                No matching relatives found
-              </div>
-            ) : (
-              searchResults.map((p, idx) => (
-                <button
-                  key={p.id}
-                  type="button"
-                  className={`search-item ${idx === activeResultIdx ? 'is-active' : ''}`}
-                  onClick={() => {
-                    onSelectSearchResult(p.id);
+      {activeWorkspace === 'tree' ? (
+        <>
+          <div className="toolbar-divider" />
+
+          {/* Search */}
+          <div className="search-wrap">
+            <div className="search-input-box">
+              <SearchIcon size={14} style={{ color: 'var(--ink-muted)', flexShrink: 0 }} />
+              <input
+                ref={searchInputRef}
+                type="text"
+                placeholder="Search…"
+                value={query}
+                onFocus={() => setSearchOpen(true)}
+                onChange={(e) => {
+                  setQuery(e.target.value);
+                  setSearchOpen(true);
+                  setActiveResultIdx(0);
+                }}
+                onKeyDown={(e) => {
+                  if (e.key === 'ArrowDown') {
+                    e.preventDefault();
+                    setActiveResultIdx((i) => Math.min(searchResults.length - 1, i + 1));
+                  } else if (e.key === 'ArrowUp') {
+                    e.preventDefault();
+                    setActiveResultIdx((i) => Math.max(0, i - 1));
+                  } else if (e.key === 'Enter' && searchResults[activeResultIdx]) {
+                    onSelectSearchResult(searchResults[activeResultIdx]!.id);
                     setSearchOpen(false);
                     setQuery('');
-                  }}
-                >
-                  <div>
-                    <div className="search-item-name">{p.name.display}</div>
-                    <div className="search-item-meta">
-                      {formatLifespan(p.birth, p.death) || 'Dates unknown'}
-                    </div>
+                  }
+                }}
+              />
+              <span className="search-kbd">/</span>
+            </div>
+
+            {searchOpen && (
+              <div className="search-dropdown">
+                {searchResults.length === 0 ? (
+                  <div style={{ padding: '10px 12px', fontSize: 12, color: 'var(--ink-muted)' }}>
+                    No matching relatives found
                   </div>
-                  {relationshipLabels.get(p.id) && (
-                    <span className="search-item-rel">{relationshipLabels.get(p.id)}</span>
-                  )}
-                </button>
-              ))
+                ) : (
+                  searchResults.map((p, idx) => (
+                    <button
+                      key={p.id}
+                      type="button"
+                      className={`search-item ${idx === activeResultIdx ? 'is-active' : ''}`}
+                      onClick={() => {
+                        onSelectSearchResult(p.id);
+                        setSearchOpen(false);
+                        setQuery('');
+                      }}
+                    >
+                      <div>
+                        <div className="search-item-name">{p.name.display}</div>
+                        <div className="search-item-meta">
+                          {formatLifespan(p.birth, p.death) || 'Dates unknown'}
+                        </div>
+                      </div>
+                      {relationshipLabels.get(p.id) && (
+                        <span className="search-item-rel">{relationshipLabels.get(p.id)}</span>
+                      )}
+                    </button>
+                  ))
+                )}
+              </div>
             )}
           </div>
-        )}
-      </div>
 
-      {/* Mode Switcher */}
-      <div className="segmented" role="group" aria-label="Layout mode">
-        {(
-          [
-            ['hourglass', 'Hourglass'],
-            ['ancestors', 'Ancestors'],
-            ['descendants', 'Descendants'],
-          ] as const
-        ).map(([m, label]) => (
-          <button
-            key={m}
-            type="button"
-            className={`segmented-btn ${mode === m ? 'is-active' : ''}`}
-            onClick={() => onChangeMode(m)}
-          >
-            {label}
-          </button>
-        ))}
-      </div>
-
-      {/* Generation Level Steppers */}
-      <div className="stepper-group">
-        {mode !== 'descendants' && (
-          <div className="stepper" title="Ancestor generations above focus">
-            <span className="stepper-label">↑ Up</span>
-            <button
-              type="button"
-              className="stepper-btn"
-              disabled={ancestorLevels <= 0}
-              onClick={() => onChangeAncestorLevels(Math.max(0, ancestorLevels - 1))}
-            >
-              −
-            </button>
-            <span className="stepper-val">{ancestorLevels}</span>
-            <button
-              type="button"
-              className="stepper-btn"
-              disabled={ancestorLevels >= 8}
-              onClick={() => onChangeAncestorLevels(Math.min(8, ancestorLevels + 1))}
-            >
-              +
-            </button>
+          {/* Mode Switcher */}
+          <div className="segmented" role="group" aria-label="Layout mode">
+            {(
+              [
+                ['hourglass', 'Hourglass'],
+                ['ancestors', 'Ancestors'],
+                ['descendants', 'Descendants'],
+              ] as const
+            ).map(([m, label]) => (
+              <button
+                key={m}
+                type="button"
+                className={`segmented-btn ${mode === m ? 'is-active' : ''}`}
+                onClick={() => onChangeMode(m)}
+              >
+                {label}
+              </button>
+            ))}
           </div>
-        )}
 
-        {mode !== 'ancestors' && (
-          <div className="stepper" title="Descendant generations below focus">
-            <span className="stepper-label">↓ Down</span>
-            <button
-              type="button"
-              className="stepper-btn"
-              disabled={descendantLevels <= 0}
-              onClick={() => onChangeDescendantLevels(Math.max(0, descendantLevels - 1))}
-            >
-              −
-            </button>
-            <span className="stepper-val">{descendantLevels}</span>
-            <button
-              type="button"
-              className="stepper-btn"
-              disabled={descendantLevels >= 8}
-              onClick={() => onChangeDescendantLevels(Math.min(8, descendantLevels + 1))}
-            >
-              +
-            </button>
+          {/* Generation Level Steppers */}
+          <div className="stepper-group">
+            {mode !== 'descendants' && (
+              <div className="stepper" title="Ancestor generations above focus">
+                <span className="stepper-label">↑ Up</span>
+                <button
+                  type="button"
+                  className="stepper-btn"
+                  disabled={ancestorLevels <= 0}
+                  onClick={() => onChangeAncestorLevels(Math.max(0, ancestorLevels - 1))}
+                >
+                  −
+                </button>
+                <span className="stepper-val">{ancestorLevels}</span>
+                <button
+                  type="button"
+                  className="stepper-btn"
+                  disabled={ancestorLevels >= 8}
+                  onClick={() => onChangeAncestorLevels(Math.min(8, ancestorLevels + 1))}
+                >
+                  +
+                </button>
+              </div>
+            )}
+
+            {mode !== 'ancestors' && (
+              <div className="stepper" title="Descendant generations below focus">
+                <span className="stepper-label">↓ Down</span>
+                <button
+                  type="button"
+                  className="stepper-btn"
+                  disabled={descendantLevels <= 0}
+                  onClick={() => onChangeDescendantLevels(Math.max(0, descendantLevels - 1))}
+                >
+                  −
+                </button>
+                <span className="stepper-val">{descendantLevels}</span>
+                <button
+                  type="button"
+                  className="stepper-btn"
+                  disabled={descendantLevels >= 8}
+                  onClick={() => onChangeDescendantLevels(Math.min(8, descendantLevels + 1))}
+                >
+                  +
+                </button>
+              </div>
+            )}
           </div>
-        )}
-      </div>
+        </>
+      ) : (
+        scrapbookControlsSlot
+      )}
 
       <div className="toolbar-spacer" />
 
       {/* Right Actions */}
       <div className="toolbar-actions">
-        {/* Display Options Popover */}
-        <div className="popover-anchor">
-          <button
-            type="button"
-            className={`btn ${openMenu === 'options' ? 'btn-active' : ''}`}
-            onClick={() => setOpenMenu(openMenu === 'options' ? null : 'options')}
-          >
-            <SlidersIcon size={14} />
-            Display
-          </button>
-
-          {openMenu === 'options' && (
-            <div className="popover-menu">
-              <div className="popover-title">Tree Display</div>
-              <label className="toggle-row">
-                <span>Show spouses &amp; remarriages</span>
-                <input
-                  type="checkbox"
-                  checked={includeSpouses}
-                  onChange={(e) => onToggleSpouses(e.target.checked)}
-                />
-              </label>
-              {mode === 'hourglass' && (
-                <>
-                  <label className="toggle-row">
-                    <span>Show focus siblings</span>
-                    <input
-                      type="checkbox"
-                      checked={includeFocusSiblings}
-                      onChange={(e) => onToggleFocusSiblings(e.target.checked)}
-                    />
-                  </label>
-                  <label className="toggle-row">
-                    <span>Show spouse&apos;s ancestors</span>
-                    <input
-                      type="checkbox"
-                      checked={includeSpouseAncestors}
-                      disabled={!includeSpouses}
-                      onChange={(e) => onToggleSpouseAncestors(e.target.checked)}
-                    />
-                  </label>
-                </>
-              )}
-
-              <div className="popover-title" style={{ marginTop: 4 }}>
-                Lineage Filter
-              </div>
-              <select
-                className="field-select"
-                value={lineageMode}
-                onChange={(e) => onChangeLineageMode(e.target.value as LineageMode)}
+        {activeWorkspace === 'tree' && (
+          <>
+            {/* Display Options Popover */}
+            <div className="popover-anchor">
+              <button
+                type="button"
+                className={`btn ${openMenu === 'options' ? 'btn-active' : ''}`}
+                onClick={() => setOpenMenu(openMenu === 'options' ? null : 'options')}
               >
-                <option value="all">All Links (Biological, Adopted, Step)</option>
-                <option value="legal">Legal Lineage (Biological &amp; Adopted)</option>
-                <option value="biological">Biological Lineage Only</option>
-              </select>
-            </div>
-          )}
-        </div>
+                <SlidersIcon size={14} />
+                Display
+              </button>
 
-        <button
-          type="button"
-          className="btn"
-          onClick={onOpenRelationshipFinder}
-          title="Find how any two relatives are connected"
-        >
-          <LinkUsersIcon size={14} />
-          Relations
-        </button>
+              {openMenu === 'options' && (
+                <div className="popover-menu">
+                  <div className="popover-title">Tree Display</div>
+                  <label className="toggle-row">
+                    <span>Show spouses &amp; remarriages</span>
+                    <input
+                      type="checkbox"
+                      checked={includeSpouses}
+                      onChange={(e) => onToggleSpouses(e.target.checked)}
+                    />
+                  </label>
+                  {mode === 'hourglass' && (
+                    <>
+                      <label className="toggle-row">
+                        <span>Show focus siblings</span>
+                        <input
+                          type="checkbox"
+                          checked={includeFocusSiblings}
+                          onChange={(e) => onToggleFocusSiblings(e.target.checked)}
+                        />
+                      </label>
+                      <label className="toggle-row">
+                        <span>Show spouse&apos;s ancestors</span>
+                        <input
+                          type="checkbox"
+                          checked={includeSpouseAncestors}
+                          disabled={!includeSpouses}
+                          onChange={(e) => onToggleSpouseAncestors(e.target.checked)}
+                        />
+                      </label>
+                    </>
+                  )}
+
+                  <div className="popover-title" style={{ marginTop: 4 }}>
+                    Lineage Filter
+                  </div>
+                  <select
+                    className="field-select"
+                    value={lineageMode}
+                    onChange={(e) => onChangeLineageMode(e.target.value as LineageMode)}
+                  >
+                    <option value="all">All Links (Biological, Adopted, Step)</option>
+                    <option value="legal">Legal Lineage (Biological &amp; Adopted)</option>
+                    <option value="biological">Biological Lineage Only</option>
+                  </select>
+                </div>
+              )}
+            </div>
+
+            <button
+              type="button"
+              className="btn"
+              onClick={onOpenRelationshipFinder}
+              title="Find how any two relatives are connected"
+            >
+              <LinkUsersIcon size={14} />
+              Relations
+            </button>
+          </>
+        )}
 
         {/* Import / Export Popover */}
         <div className="popover-anchor">
@@ -378,7 +426,7 @@ export function Toolbar({
           <input
             ref={fileInputRef}
             type="file"
-            accept=".ged,.gedcom,.json"
+            accept=".ged,.gedcom,.json,.gdz,.zip"
             style={{ display: 'none' }}
             onChange={(e) => {
               const f = e.target.files?.[0];
@@ -391,7 +439,7 @@ export function Toolbar({
           />
 
           {openMenu === 'io' && (
-            <div className="popover-menu" style={{ width: 236 }}>
+            <div className="popover-menu" style={{ width: 272 }}>
               <div className="popover-title">Import &amp; Export</div>
               <button
                 type="button"
@@ -399,7 +447,18 @@ export function Toolbar({
                 onClick={() => fileInputRef.current?.click()}
               >
                 <UploadIcon size={15} />
-                Import .GED or .JSON…
+                Import .GED, .JSON, .GDZ or .ZIP…
+              </button>
+              <button
+                type="button"
+                className="menu-action"
+                onClick={() => {
+                  onExportHeirloomZip();
+                  setOpenMenu(null);
+                }}
+              >
+                <DownloadIcon size={15} />
+                Save Heirloom Scrapbook (.heirloom.zip)
               </button>
               <button
                 type="button"
@@ -428,6 +487,17 @@ export function Toolbar({
                 type="button"
                 className="menu-action"
                 onClick={() => {
+                  onClearLocalDraft();
+                  setOpenMenu(null);
+                }}
+              >
+                <TrashIcon size={15} />
+                Clear Local Browser Draft
+              </button>
+              <button
+                type="button"
+                className="menu-action"
+                onClick={() => {
                   onResetDemo();
                   setOpenMenu(null);
                 }}
@@ -442,8 +512,16 @@ export function Toolbar({
         <button
           type="button"
           className="btn btn-primary"
-          onClick={onOpenPrintStudio}
-          title="Configure generation levels and print or export"
+          onClick={() =>
+            activeWorkspace === 'scrapbook' && onOpenScrapbookPrint
+              ? onOpenScrapbookPrint()
+              : onOpenPrintStudio()
+          }
+          title={
+            activeWorkspace === 'scrapbook'
+              ? 'Print multi-page scrapbook booklet or save PDF'
+              : 'Configure generation levels and print or export'
+          }
         >
           <PrinterIcon size={14} />
           Print

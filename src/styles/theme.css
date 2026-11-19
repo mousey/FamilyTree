@@ -1644,7 +1644,8 @@ select {
    Dedicated A3 Print Output Stylesheet
    ========================================================================== */
 
-.a3-print-only {
+.a3-print-only,
+.scrapbook-print-only {
   display: none;
 }
 
@@ -1682,15 +1683,19 @@ select {
     height: 100%;
     display: block;
   }
+
+  .scrapbook-print-only {
+    display: block !important;
+  }
 }
 
-@media (max-width: 1220px) {
+@media (max-width: 1380px) {
   .toolbar {
     gap: 8px;
     padding: 0 10px;
   }
   .brand-title {
-    max-width: 165px;
+    max-width: 155px;
     font-size: 17px;
   }
   .brand-subtitle,
@@ -1698,7 +1703,11 @@ select {
     display: none;
   }
   .search-wrap {
-    width: 145px;
+    width: 140px;
+  }
+  .segmented-btn {
+    padding: 5px 8px;
+    font-size: 11.5px;
   }
   .btn {
     padding: 0 9px;
@@ -1709,13 +1718,34 @@ select {
   }
 }
 
-@media (max-width: 960px) {
-  .toolbar-divider,
-  .search-kbd {
-    display: none;
+@media (max-width: 1080px) {
+  .toolbar {
+    gap: 5px;
+    padding: 0 8px;
   }
+  .toolbar-divider,
+  .search-kbd,
   .brand-meta {
     display: none;
+  }
+  .search-wrap {
+    width: 110px;
+  }
+  .stepper-group {
+    display: none;
+  }
+  .segmented-btn {
+    padding: 4px 7px;
+    font-size: 11px;
+  }
+  .btn {
+    padding: 0 8px;
+    font-size: 11.5px;
+    gap: 4px;
+  }
+  .btn-icon {
+    width: 30px;
+    padding: 0;
   }
   .gen-ruler {
     display: none;
