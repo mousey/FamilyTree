@@ -275,7 +275,7 @@ export function buildRadialCircleA3Svg(
     ${centerMedallionSvg}
   </g>
 
-  <text x="110" y="${pageH - 84}" font-family="Plus Jakarta Sans, sans-serif" font-size="19" fill="#8A8074">360° Radial Pedigree · A3 ${isLandscape ? 'Landscape' : 'Portrait'}</text>
+  <text x="110" y="${pageH - 84}" font-family="Plus Jakarta Sans, sans-serif" font-size="19" fill="#8A8074">360° Radial Pedigree · ${isLandscape ? 'Landscape' : 'Portrait'}</text>
   ${legendSvg}
   <text x="${pageW - 110}" y="${pageH - 84}" text-anchor="end" font-family="Plus Jakarta Sans, sans-serif" font-size="19" fill="#8A8074">${pedigree.populatedCount} recorded · ${levels} rings</text>
 </svg>`;

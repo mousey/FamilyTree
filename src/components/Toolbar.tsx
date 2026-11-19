@@ -443,10 +443,10 @@ export function Toolbar({
           type="button"
           className="btn btn-primary"
           onClick={onOpenPrintStudio}
-          title="Configure generation levels and print or export as A3"
+          title="Configure generation levels and print or export"
         >
           <PrinterIcon size={14} />
-          A3 Print
+          Print
         </button>
 
         <button

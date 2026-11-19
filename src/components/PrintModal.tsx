@@ -272,14 +272,14 @@ export function PrintModal({
         className="modal-dialog modal-wide"
         role="dialog"
         aria-modal="true"
-        aria-label="A3 Print and Vector Export Studio"
+        aria-label="Print and Vector Export Studio"
         onClick={(e) => e.stopPropagation()}
       >
         <div className="modal-header">
           <div>
-            <h2 className="modal-title">A3 Print &amp; Vector Export Studio</h2>
+            <h2 className="modal-title">Print &amp; Vector Export Studio</h2>
             <div style={{ fontSize: 12, color: 'var(--ink-muted)' }}>
-              Choose a print style, focal person, and generation depth for crisp A3 PDF or SVG export
+              Choose a print style, focal person, and generation depth for crisp PDF or SVG export
             </div>
           </div>
           <button
@@ -287,7 +287,7 @@ export function PrintModal({
             className="btn btn-icon"
             style={{ width: 30, height: 30 }}
             onClick={onClose}
-            aria-label="Close A3 print studio"
+            aria-label="Close print studio"
           >
             <CloseIcon size={15} />
           </button>
@@ -393,14 +393,14 @@ export function PrintModal({
               </div>
 
               <label className="field-label">
-                <span>A3 Paper Orientation</span>
+                <span>Paper Orientation</span>
                 <select
                   className="field-select"
                   value={orientation}
                   onChange={(e) => setOrientation(e.target.value as PrintOrientation)}
                 >
-                  <option value="landscape">A3 Landscape (420 × 297 mm)</option>
-                  <option value="portrait">A3 Portrait (297 × 420 mm)</option>
+                  <option value="landscape">Landscape</option>
+                  <option value="portrait">Portrait</option>
                 </select>
               </label>
 
@@ -479,7 +479,7 @@ export function PrintModal({
                   color: 'var(--ink-secondary)',
                 }}
               >
-                <strong>{summaryText}</strong> · Vector A3 ready
+                <strong>{summaryText}</strong> · Vector print ready
               </div>
             </div>
 
@@ -501,7 +501,7 @@ export function PrintModal({
           </button>
           <button type="button" className="btn" onClick={handleDownloadSvg}>
             <DownloadIcon size={14} />
-            Download A3 SVG
+            Download SVG
           </button>
           <button
             type="button"
@@ -509,7 +509,7 @@ export function PrintModal({
             onClick={() => onPrintSvg(svgMarkup, orientation)}
           >
             <PrinterIcon size={14} />
-            Print / Save A3 PDF
+            Print / Save PDF
           </button>
         </div>
       </div>

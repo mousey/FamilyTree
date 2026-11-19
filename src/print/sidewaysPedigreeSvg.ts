@@ -357,7 +357,7 @@ export function buildSidewaysPedigreeA3Svg(
     ${cardSvgs.join('\n    ')}
   </g>
 
-  <text x="${marginX}" y="${pageH - 82}" font-family="Plus Jakarta Sans, sans-serif" font-size="19" fill="#8A8074">Sideways Archival Pedigree · A3 ${isLandscape ? 'Landscape (420 × 297 mm)' : 'Portrait (297 × 420 mm)'}</text>
+  <text x="${marginX}" y="${pageH - 82}" font-family="Plus Jakarta Sans, sans-serif" font-size="19" fill="#8A8074">Sideways Archival Pedigree · ${isLandscape ? 'Landscape' : 'Portrait'}</text>
   <text x="${pageW - marginX}" y="${pageH - 82}" text-anchor="end" font-family="Plus Jakarta Sans, sans-serif" font-size="19" fill="#8A8074">${pedigree.populatedCount} recorded · ${levels + 1} generations</text>
 </svg>`;
 }

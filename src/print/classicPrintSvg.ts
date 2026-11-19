@@ -129,7 +129,7 @@ export function buildClassicA3Svg(
     ${cardNodes}
   </g>
 
-  <text x="110" y="${pageH - 86}" font-family="Plus Jakarta Sans, sans-serif" font-size="20" fill="#8A8074">Heirloom Family Tree · A3 ${options.orientation === 'landscape' ? 'Landscape (420 × 297 mm)' : 'Portrait (297 × 420 mm)'}</text>
+  <text x="110" y="${pageH - 86}" font-family="Plus Jakarta Sans, sans-serif" font-size="20" fill="#8A8074">Heirloom Family Tree · ${options.orientation === 'landscape' ? 'Landscape' : 'Portrait'}</text>
   <text x="${pageW / 2}" y="${pageH - 86}" text-anchor="middle" font-family="Plus Jakarta Sans, sans-serif" font-size="18" fill="#8A8074">Solid: Biological · Dashed: Adopted · Dotted: Step · Gold: Marriage · Crimson //: Divorced</text>
   <text x="${pageW - 110}" y="${pageH - 86}" text-anchor="end" font-family="Plus Jakarta Sans, sans-serif" font-size="20" fill="#8A8074">${layout.nodes.length} individuals · ${layout.generations.length} generations</text>
 </svg>`;
