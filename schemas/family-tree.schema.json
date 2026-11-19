@@ -1,0 +1,672 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://familytree.local/schemas/family-tree.schema.json",
+  "title": "FamilyTree",
+  "description": "Bipartite genealogical graph separating Person nodes from Union relationship edges.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schemaVersion",
+    "metadata",
+    "persons",
+    "unions",
+    "media",
+    "sources",
+    "repositories",
+    "notes"
+  ],
+  "properties": {
+    "schemaVersion": {
+      "const": "1.0.0"
+    },
+    "metadata": {
+      "$ref": "#/$defs/TreeMetadata"
+    },
+    "persons": {
+      "type": "object",
+      "additionalProperties": {
+        "$ref": "#/$defs/Person"
+      }
+    },
+    "unions": {
+      "type": "object",
+      "additionalProperties": {
+        "$ref": "#/$defs/Union"
+      }
+    },
+    "media": {
+      "type": "object",
+      "additionalProperties": {
+        "$ref": "#/$defs/MediaObject"
+      }
+    },
+    "sources": {
+      "type": "object",
+      "additionalProperties": {
+        "$ref": "#/$defs/SourceRecord"
+      }
+    },
+    "repositories": {
+      "type": "object",
+      "additionalProperties": {
+        "$ref": "#/$defs/RepositoryRecord"
+      }
+    },
+    "notes": {
+      "type": "object",
+      "additionalProperties": {
+        "$ref": "#/$defs/NoteRecord"
+      }
+    }
+  },
+  "$defs": {
+    "PrimitiveMetadataMap": {
+      "type": "object",
+      "additionalProperties": {
+        "type": ["string", "number", "boolean"]
+      }
+    },
+    "DateQualifier": {
+      "type": "string",
+      "enum": [
+        "exact",
+        "about",
+        "before",
+        "after",
+        "between",
+        "from_to",
+        "calculated",
+        "estimated"
+      ]
+    },
+    "PartialDate": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "year": {
+          "type": "integer"
+        },
+        "month": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 12
+        },
+        "day": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 31
+        }
+      }
+    },
+    "GenealogicalDate": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["raw", "qualifier"],
+      "properties": {
+        "raw": {
+          "type": "string"
+        },
+        "qualifier": {
+          "$ref": "#/$defs/DateQualifier"
+        },
+        "start": {
+          "$ref": "#/$defs/PartialDate"
+        },
+        "end": {
+          "$ref": "#/$defs/PartialDate"
+        },
+        "sortKey": {
+          "type": "integer"
+        }
+      }
+    },
+    "BiologicalSex": {
+      "type": "string",
+      "enum": ["male", "female", "other", "unknown"]
+    },
+    "PersonName": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["display"],
+      "properties": {
+        "given": {
+          "type": "string"
+        },
+        "surname": {
+          "type": "string"
+        },
+        "prefix": {
+          "type": "string"
+        },
+        "suffix": {
+          "type": "string"
+        },
+        "nickname": {
+          "type": "string"
+        },
+        "display": {
+          "type": "string"
+        },
+        "type": {
+          "type": "string",
+          "enum": ["birth", "married", "maiden", "aka", "other"]
+        }
+      }
+    },
+    "SourceCitation": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["sourceId"],
+      "properties": {
+        "sourceId": {
+          "type": "string",
+          "minLength": 1
+        },
+        "page": {
+          "type": "string"
+        },
+        "externalIds": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "note": {
+          "type": "string"
+        }
+      }
+    },
+    "PersonEventType": {
+      "type": "string",
+      "enum": [
+        "birth",
+        "baptism",
+        "christening",
+        "death",
+        "burial",
+        "cremation",
+        "residence",
+        "occupation",
+        "immigration",
+        "emigration",
+        "arrival",
+        "departure",
+        "military",
+        "census",
+        "adoption",
+        "custom"
+      ]
+    },
+    "LifeEvent": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["type"],
+      "properties": {
+        "type": {
+          "$ref": "#/$defs/PersonEventType"
+        },
+        "customType": {
+          "type": "string"
+        },
+        "date": {
+          "$ref": "#/$defs/GenealogicalDate"
+        },
+        "place": {
+          "type": "string"
+        },
+        "description": {
+          "type": "string"
+        },
+        "notes": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "citations": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/SourceCitation"
+          }
+        }
+      }
+    },
+    "UnionEventType": {
+      "type": "string",
+      "enum": [
+        "marriage",
+        "engagement",
+        "divorce",
+        "divorce_filed",
+        "annulment",
+        "separation",
+        "custom"
+      ]
+    },
+    "UnionEvent": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["type"],
+      "properties": {
+        "type": {
+          "$ref": "#/$defs/UnionEventType"
+        },
+        "customType": {
+          "type": "string"
+        },
+        "date": {
+          "$ref": "#/$defs/GenealogicalDate"
+        },
+        "place": {
+          "type": "string"
+        },
+        "description": {
+          "type": "string"
+        },
+        "notes": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "citations": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/SourceCitation"
+          }
+        }
+      }
+    },
+    "MediaReference": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["mediaId"],
+      "properties": {
+        "mediaId": {
+          "type": "string",
+          "minLength": 1
+        },
+        "isPrimary": {
+          "type": "boolean"
+        }
+      }
+    },
+    "MediaObject": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id"],
+      "properties": {
+        "id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "title": {
+          "type": "string"
+        },
+        "format": {
+          "type": "string"
+        },
+        "mimeType": {
+          "type": "string"
+        },
+        "mediaType": {
+          "type": "string"
+        },
+        "file": {
+          "type": "string"
+        },
+        "width": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "height": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "fileSize": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "date": {
+          "$ref": "#/$defs/GenealogicalDate"
+        },
+        "place": {
+          "type": "string"
+        },
+        "description": {
+          "type": "string"
+        },
+        "transcription": {
+          "type": "string"
+        },
+        "externalId": {
+          "type": "string"
+        }
+      }
+    },
+    "Person": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "name",
+        "sex",
+        "events",
+        "media",
+        "notes",
+        "citations"
+      ],
+      "properties": {
+        "id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "name": {
+          "$ref": "#/$defs/PersonName"
+        },
+        "alternateNames": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/PersonName"
+          }
+        },
+        "sex": {
+          "$ref": "#/$defs/BiologicalSex"
+        },
+        "birth": {
+          "$ref": "#/$defs/LifeEvent"
+        },
+        "death": {
+          "$ref": "#/$defs/LifeEvent"
+        },
+        "events": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/LifeEvent"
+          }
+        },
+        "media": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/MediaReference"
+          }
+        },
+        "notes": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "noteIds": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1
+          }
+        },
+        "citations": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/SourceCitation"
+          }
+        },
+        "isLiving": {
+          "type": "boolean"
+        },
+        "metadata": {
+          "$ref": "#/$defs/PrimitiveMetadataMap"
+        }
+      }
+    },
+    "UnionType": {
+      "type": "string",
+      "enum": [
+        "marriage",
+        "partnership",
+        "civil_union",
+        "engaged",
+        "common_law",
+        "unknown"
+      ]
+    },
+    "UnionStatus": {
+      "type": "string",
+      "enum": [
+        "active",
+        "divorced",
+        "separated",
+        "annulled",
+        "widowed",
+        "ended",
+        "unknown"
+      ]
+    },
+    "ParentChildType": {
+      "type": "string",
+      "enum": ["biological", "adopted", "foster", "step", "sealed", "unknown"]
+    },
+    "UnionPartner": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["personId"],
+      "properties": {
+        "personId": {
+          "type": "string",
+          "minLength": 1
+        },
+        "role": {
+          "type": "string",
+          "enum": ["husband", "wife", "partner"]
+        }
+      }
+    },
+    "ChildLink": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["personId"],
+      "properties": {
+        "personId": {
+          "type": "string",
+          "minLength": 1
+        },
+        "pedigree": {
+          "$ref": "#/$defs/ParentChildType"
+        },
+        "parentRelations": {
+          "type": "object",
+          "additionalProperties": {
+            "$ref": "#/$defs/ParentChildType"
+          }
+        },
+        "notes": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        }
+      }
+    },
+    "Union": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "partners",
+        "children",
+        "type",
+        "status",
+        "events",
+        "notes",
+        "citations"
+      ],
+      "properties": {
+        "id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "partners": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/UnionPartner"
+          }
+        },
+        "children": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/ChildLink"
+          }
+        },
+        "type": {
+          "$ref": "#/$defs/UnionType"
+        },
+        "status": {
+          "$ref": "#/$defs/UnionStatus"
+        },
+        "marriage": {
+          "$ref": "#/$defs/UnionEvent"
+        },
+        "divorce": {
+          "$ref": "#/$defs/UnionEvent"
+        },
+        "events": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/UnionEvent"
+          }
+        },
+        "notes": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "noteIds": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1
+          }
+        },
+        "citations": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/SourceCitation"
+          }
+        },
+        "media": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/MediaReference"
+          }
+        },
+        "metadata": {
+          "$ref": "#/$defs/PrimitiveMetadataMap"
+        }
+      }
+    },
+    "SourceRecord": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id"],
+      "properties": {
+        "id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "title": {
+          "type": "string"
+        },
+        "author": {
+          "type": "string"
+        },
+        "publisher": {
+          "type": "string"
+        },
+        "repositoryId": {
+          "type": "string",
+          "minLength": 1
+        },
+        "externalId": {
+          "type": "string"
+        },
+        "note": {
+          "type": "string"
+        },
+        "metadata": {
+          "$ref": "#/$defs/PrimitiveMetadataMap"
+        }
+      }
+    },
+    "RepositoryRecord": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "name"],
+      "properties": {
+        "id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "name": {
+          "type": "string"
+        },
+        "address": {
+          "type": "string"
+        },
+        "url": {
+          "type": "string"
+        },
+        "phone": {
+          "type": "string"
+        },
+        "note": {
+          "type": "string"
+        }
+      }
+    },
+    "NoteRecord": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "text"],
+      "properties": {
+        "id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "text": {
+          "type": "string"
+        }
+      }
+    },
+    "TreeMetadata": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "title": {
+          "type": "string"
+        },
+        "description": {
+          "type": "string"
+        },
+        "sourceSystem": {
+          "type": "string"
+        },
+        "sourceVersion": {
+          "type": "string"
+        },
+        "exportedAt": {
+          "type": "string"
+        },
+        "defaultRootPersonId": {
+          "type": "string",
+          "minLength": 1
+        },
+        "submitterName": {
+          "type": "string"
+        },
+        "custom": {
+          "$ref": "#/$defs/PrimitiveMetadataMap"
+        }
+      }
+    }
+  }
+}
